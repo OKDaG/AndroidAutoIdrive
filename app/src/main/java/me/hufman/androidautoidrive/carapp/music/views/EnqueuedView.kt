@@ -10,6 +10,7 @@ import me.hufman.androidautoidrive.music.MusicMetadata
 import me.hufman.androidautoidrive.music.QueueMetadata
 import me.hufman.idriveconnectionkit.rhmi.*
 import kotlin.math.max
+import kotlin.math.min
 
 class EnqueuedView(val state: RHMIState, val musicController: MusicController, val graphicsHelpers: GraphicsHelpers, val musicImageIDs: MusicImageIDs) {
 	companion object {
@@ -33,7 +34,7 @@ class EnqueuedView(val state: RHMIState, val musicController: MusicController, v
 	val songsEmptyList = RHMIModel.RaListModel.RHMIListConcrete(3)
 	var queueMetadata: QueueMetadata? = null
 	var visibleRows: List<MusicMetadata> = emptyList()
-	var visibleRowsOriginalMusicMetadata: ArrayList<MusicMetadata> = ArrayList()
+	var visibleRowsOriginalMusicMetadata: List<MusicMetadata> = emptyList()
 	var selectedIndex: Int = 0
 
 	var songsListAdapter = object: RHMIListAdapter<MusicMetadata>(4, songsList) {
@@ -102,12 +103,11 @@ class EnqueuedView(val state: RHMIState, val musicController: MusicController, v
 				showList(startIndex, numRows)
 
 				val endIndex = if (startIndex + numRows >= songsList.size) songsList.size - 1 else startIndex + numRows
-				visibleRows = songsListAdapter.realData.subList(startIndex, endIndex + 1)
-				visibleRowsOriginalMusicMetadata.clear()
-				visibleRows.forEach { musicMetadata ->
-					visibleRowsOriginalMusicMetadata.add(MusicMetadata.copy(musicMetadata))
-				}
+				visibleRows = ArrayList(songsListAdapter.realData.subList(startIndex, endIndex + 1))
+				visibleRowsOriginalMusicMetadata = visibleRows.map { MusicMetadata.copy(it) }
 			}
+
+			showList(0, 20)
 
 			showCurrentlyPlayingSong()
 		} else {
@@ -118,14 +118,16 @@ class EnqueuedView(val state: RHMIState, val musicController: MusicController, v
 
 		val queueTitle = UnicodeCleaner.clean(queueMetadata?.title ?: "")
 		val queueSubtitle = UnicodeCleaner.clean(queueMetadata?.subtitle ?: "")
+		val queueCoverArt = queueMetadata?.coverArt
 		if (queueTitle.isBlank() && queueSubtitle.isBlank()) {
-			state.getTextModel()?.asRaDataModel()?.value = "Now Playing"
+			state.getTextModel()?.asRaDataModel()?.value = L.MUSIC_QUEUE_TITLE
 		} else {
 			state.getTextModel()?.asRaDataModel()?.value = "$queueTitle - $queueSubtitle"
 		}
 
-		if (queueMetadata?.coverArt != null) {
-			queueImageComponent.getModel()?.asRaImageModel()?.value = graphicsHelpers.compress(musicController.getQueue()?.coverArt!!, 180, 180, quality = 60)
+		if (queueCoverArt != null) {
+			queueImageComponent.getModel()?.asRaImageModel()?.value = graphicsHelpers.compress(queueCoverArt, 180, 180, quality = 60)
+			queueImageComponent.setVisible(true)
 			titleLabelComponent.getModel()?.asRaDataModel()?.value = queueTitle
 			subtitleLabelComponent.getModel()?.asRaDataModel()?.value = queueSubtitle
 		}
@@ -174,6 +176,7 @@ class EnqueuedView(val state: RHMIState, val musicController: MusicController, v
 			state.app.events.values.firstOrNull { it is RHMIEvent.FocusEvent }?.triggerEvent(
 					mapOf(0.toByte() to listComponent.id, 41.toByte() to index)
 			)
+			onSelectAction(index)
 		}
 	}
 
@@ -197,7 +200,7 @@ class EnqueuedView(val state: RHMIState, val musicController: MusicController, v
 	 */
 	private fun showList(startIndex: Int = 0, numRows: Int = 10) {
 		if (startIndex >= 0) {
-			listComponent.getModel()?.setValue(songsListAdapter, startIndex, numRows, songsListAdapter.height)
+			listComponent.getModel()?.setValue(songsListAdapter, startIndex, min(songsListAdapter.height, numRows), songsListAdapter.height)
 		}
 	}
 
